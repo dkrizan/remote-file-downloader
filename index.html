@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Plex Downloader</title>
+  <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 p-8" x-data="downloaderApp()">
+  <div class="max-w-2xl mx-auto bg-white p-6 rounded shadow">
+    <h1 class="text-2xl font-bold mb-4">File Downloader</h1>
+
+    <div class="mb-4">
+      <label class="block text-sm font-medium text-gray-700">URL súboru</label>
+      <input type="text" x-model="url" class="mt-1 block w-full border border-gray-300 rounded px-3 py-2">
+    </div>
+
+    <div class="mb-4">
+      <label class="block text-sm font-medium text-gray-700">Cieľový priečinok</label>
+      <input type="text" x-model="folderInput" @input="filterFolders" @blur="hideSuggestionsWithDelay" @focus="showSuggestions = true"
+             class="mt-1 block border border-gray-300 rounded px-3 py-2">
+      <ul class="bg-white border mt-1 rounded shadow absolute z-10" x-show="showSuggestions">
+        <template x-for="suggestion in filteredFolders" :key="suggestion">
+          <li @click="selectFolder(suggestion)" class="px-3 py-2 hover:bg-gray-100 cursor-pointer w-full" x-html="suggestion"></li>
+        </template>
+      </ul>
+    </div>
+
+    <button @click="download" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Stiahnuť</button>
+
+    <div class="mt-6">
+      <h2 class="text-lg font-semibold mb-2">Prebiehajúce sťahovania</h2>
+      <template x-if="downloads.length === 0">
+        <p class="text-gray-500">Žiadne sťahovania</p>
+      </template>
+      <ul>
+        <template x-for="dl in downloads" :key="dl.gid">
+            <li class="mb-1"
+                x-text="dl.files[0].path.split('/').pop() + ' – ' + (Math.round(dl.completedLength / dl.totalLength * 100) || 0) + '%'">
+            </li>
+        </template>
+      </ul>
+    </div>
+  </div>
+
+  <script>
+    function downloaderApp() {
+      return {
+        url: '',
+        folderInput: '',
+        folders: [],
+        filteredFolders: [],
+        showSuggestions: false,
+        downloads: [],
+
+        async init() {
+          const res = await fetch('/folders');
+          this.folders = await res.json();
+          this.filteredFolders = this.folders;
+          this.pollDownloads();
+          setInterval(() => this.pollDownloads(), 3000);
+        },
+
+        filterFolders() {
+          const input = this.folderInput.toLowerCase();
+          this.filteredFolders = this.folders.filter(f => f.toLowerCase().includes(input));
+          this.showSuggestions = true;
+        },
+
+        selectFolder(folder) {
+          this.folderInput = folder;
+          this.showSuggestions = false;
+        },
+
+        hideSuggestionsWithDelay() {
+          setTimeout(() => this.showSuggestions = false, 200);
+        },
+
+        async download() {
+          if (!this.url || !this.folderInput) return alert("Vyplň URL aj priečinok");
+
+          await fetch('/download', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: this.url, folder: this.folderInput })
+          });
+
+          this.url = '';
+          this.folderInput = '';
+        },
+
+        async pollDownloads() {
+          const res = await fetch('/downloads');
+          this.downloads = await res.json();
+        }
+      }
+    }
+  </script>
+</body>
+</html>

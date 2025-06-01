@@ -1,0 +1,3 @@
+# Keep this folder, ignore all files except this placeholder
+*
+!.gitignore
