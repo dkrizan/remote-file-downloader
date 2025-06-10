@@ -1,101 +1,641 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Plex Downloader</title>
-  <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
-  <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="bg-gray-100 p-8" x-data="downloaderApp()">
-  <div class="max-w-2xl mx-auto bg-white p-6 rounded shadow">
-    <h1 class="text-2xl font-bold mb-4">File Downloader</h1>
-
-    <div class="mb-4">
-      <label class="block text-sm font-medium text-gray-700">URL súboru</label>
-      <input type="text" x-model="url" class="mt-1 block w-full border border-gray-300 rounded px-3 py-2">
-    </div>
-
-    <div class="mb-4">
-      <label class="block text-sm font-medium text-gray-700">Cieľový priečinok</label>
-      <input type="text" x-model="folderInput" @input="filterFolders" @blur="hideSuggestionsWithDelay" @focus="showSuggestions = true"
-             class="mt-1 block border border-gray-300 rounded px-3 py-2">
-      <ul class="bg-white border mt-1 rounded shadow absolute z-10" x-show="showSuggestions">
-        <template x-for="suggestion in filteredFolders" :key="suggestion">
-          <li @click="selectFolder(suggestion)" class="px-3 py-2 hover:bg-gray-100 cursor-pointer w-full" x-html="suggestion"></li>
-        </template>
-      </ul>
-    </div>
-
-    <button @click="download" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Stiahnuť</button>
-
-    <div class="mt-6">
-      <h2 class="text-lg font-semibold mb-2">Prebiehajúce sťahovania</h2>
-      <template x-if="downloads.length === 0">
-        <p class="text-gray-500">Žiadne sťahovania</p>
-      </template>
-      <ul>
-        <template x-for="dl in downloads" :key="dl.gid">
-            <li class="mb-1"
-                x-text="dl.files[0].path.split('/').pop() + ' – ' + (Math.round(dl.completedLength / dl.totalLength * 100) || 0) + '%'">
-            </li>
-        </template>
-      </ul>
-    </div>
-  </div>
-
-  <script>
-    function downloaderApp() {
-      return {
-        url: '',
-        folderInput: '',
-        folders: [],
-        filteredFolders: [],
-        showSuggestions: false,
-        downloads: [],
-
-        async init() {
-          const res = await fetch('/folders');
-          this.folders = await res.json();
-          this.filteredFolders = this.folders;
-          this.pollDownloads();
-          setInterval(() => this.pollDownloads(), 3000);
-        },
-
-        filterFolders() {
-          const input = this.folderInput.toLowerCase();
-          this.filteredFolders = this.folders.filter(f => f.toLowerCase().includes(input));
-          this.showSuggestions = true;
-        },
-
-        selectFolder(folder) {
-          this.folderInput = folder;
-          this.showSuggestions = false;
-        },
-
-        hideSuggestionsWithDelay() {
-          setTimeout(() => this.showSuggestions = false, 200);
-        },
-
-        async download() {
-          if (!this.url || !this.folderInput) return alert("Vyplň URL aj priečinok");
-
-          await fetch('/download', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url: this.url, folder: this.folderInput })
-          });
-
-          this.url = '';
-          this.folderInput = '';
-        },
-
-        async pollDownloads() {
-          const res = await fetch('/downloads');
-          this.downloads = await res.json();
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Remote File Uploader</title>
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/alpinejs/3.13.3/cdn.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
-      }
-    }
-  </script>
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 24px;
+            padding: 32px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            animation: slideUp 0.6s ease-out;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        h1 {
+            color: #2d3748;
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .subtitle {
+            color: #718096;
+            font-size: 1.1rem;
+            margin-bottom: 32px;
+        }
+
+        .form-section {
+            background: #f7fafc;
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 32px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .input-group {
+            margin-bottom: 20px;
+            position: relative;
+        }
+
+        label {
+            display: block;
+            color: #4a5568;
+            font-weight: 600;
+            margin-bottom: 8px;
+            font-size: 0.95rem;
+        }
+
+        input[type="url"], select, input[type="text"] {
+            width: 100%;
+            padding: 16px 20px;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+            background: white;
+        }
+
+        input[type="url"]:focus, select:focus, input[type="text"]:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+            transform: translateY(-1px);
+        }
+
+        .folder-suggestion {
+            padding: 10px 16px;
+            cursor: pointer;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .folder-suggestion:hover {
+            background: #fff;
+        }
+
+        select {
+            cursor: pointer;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 16px 32px;
+            border-radius: 12px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+            disabled:opacity-50;
+            disabled:cursor-not-allowed;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+        }
+
+        .btn-primary:active:not(:disabled) {
+            transform: translateY(0);
+        }
+
+        .downloads-section {
+            margin-top: 32px;
+        }
+
+        .section-title {
+            color: #2d3748;
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .download-item {
+            background: white;
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 16px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+            border: 1px solid #e2e8f0;
+            animation: slideIn 0.4s ease-out;
+            transition: all 0.3s ease;
+        }
+
+        .download-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .download-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .download-name {
+            font-weight: 600;
+            color: #2d3748;
+            font-size: 1.1rem;
+            word-break: break-all;
+        }
+
+        .download-status {
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .status-downloading {
+            background: #fef5e7;
+            color: #c05621;
+        }
+
+        .status-complete {
+            background: #f0fff4;
+            color: #22543d;
+        }
+
+        .status-completed {
+            background: #f0fff4;
+            color: #22543d;
+        }
+
+        .status-error {
+            background: #fed7d7;
+            color: #c53030;
+        }
+
+        .download-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            font-size: 0.9rem;
+            color: #718096;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .progress-container {
+            background: #f1f5f9;
+            border-radius: 10px;
+            height: 8px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            border-radius: 10px;
+            transition: width 0.3s ease;
+            position: relative;
+        }
+
+        .progress-bar::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+            animation: shimmer 2s infinite;
+        }
+
+        @keyframes shimmer {
+            0% { left: -100%; }
+            100% { left: 100%; }
+        }
+
+        .empty-state {
+            text-align: center;
+            color: #a0aec0;
+            font-style: italic;
+            padding: 40px;
+        }
+
+        .error-message {
+            background: #fed7d7;
+            color: #c53030;
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            font-size: 0.9rem;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #ffffff;
+            border-radius: 50%;
+            border-top-color: transparent;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        @media (max-width: 640px) {
+            .container {
+                padding: 20px;
+            }
+            
+            h1 {
+                font-size: 2rem;
+            }
+            
+            .download-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 8px;
+            }
+            
+            .download-info {
+                justify-content: flex-start;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container" x-data="fileUploader()"">
+        <h1>🚀 Remote File Uploader</h1>
+        <p class="subtitle">Upload files to your server with style and speed</p>
+        
+        <div class="form-section">
+            <div x-show="error" class="error-message" x-text="error"></div>
+            
+            <div class="input-group">
+                <label for="fileUrl">📎 File URL</label>
+                <input 
+                    type="url" 
+                    id="fileUrl" 
+                    x-model="form.url" 
+                    placeholder="https://example.com/file.zip"
+                    :disabled="loading"
+                >
+            </div>
+            
+            <div class="input-group">
+                <label for="mediaType">🎬 Media Type</label>
+                <select 
+                    id="mediaType" 
+                    x-model="form.mediaType"
+                    :disabled="loading"
+                    @change="onMediaTypeChange()"
+                >
+                    <option value="MOVIE">Movie</option>
+                    <option value="TV_SERIE">TV Serie</option>
+                </select>
+            </div>
+
+            <div class="input-group">
+                <label for="folder">📁 Destination Folder</label>
+                <input
+                    id="folder"
+                    type="text"
+                    x-model="form.folder"
+                    placeholder="Type or select folder"
+                    :disabled="loading"
+                    @input="showFolderSuggestions = true"
+                    @focus="showFolderSuggestions = true"
+                    @blur="setTimeout(() => showFolderSuggestions = false, 200)"
+                    autocomplete="off"
+                >
+                <div 
+                    x-show="showFolderSuggestions && filteredFolders.length > 0"
+                    style="position: absolute; background: white; border: 1px solid #e2e8f0; border-radius: 8px; width: 100%; z-index: 10; max-height: 160px; overflow-y: auto;"
+                >
+                    <template x-for="folder in filteredFolders" :key="folder">
+                        <div 
+                            style="padding: 10px 16px; cursor: pointer;"
+                            @mousedown.prevent="form.folder = folder; showFolderSuggestions = false"
+                            x-text="folder"
+                            class="folder-suggestion"
+                            :style="folder === form.folder ? 'background: #f0f4fa;' : ''"
+                        ></div>
+                    </template>
+                </div>
+                <template x-if="form.folder && !folders.includes(form.folder)">
+                    <div style="margin-top: 6px; color: #667eea; font-size: 0.95em;">
+                        New folder will be created: <b x-text="form.folder"></b>
+                    </div>
+                </template>
+            </div>
+            
+            <button 
+                class="btn-primary" 
+                @click="startDownload()"
+                :disabled="loading || !form.url.trim()"
+            >
+                <span x-show="!loading">⬇️ Start Download</span>
+                <span x-show="loading" class="loading"></span>
+                <span x-show="loading" x-text="' Starting...'"></span>
+            </button>
+        </div>
+        
+        <div class="downloads-section">
+            <h2 class="section-title">
+                <span>📥</span>
+                Active Downloads
+                <span x-text="`(${downloads.length})`" style="font-size: 1rem; color: #718096;"></span>
+            </h2>
+            
+            <div x-show="downloads.length === 0" class="empty-state">
+                No downloads yet. Add a file URL above to get started! ✨
+            </div>
+            
+            <template x-for="download in downloads" :key="download.id">
+                <div class="download-item">
+                    <div class="download-header">
+                        <div class="download-name" x-text="download.name"></div>
+                        <div 
+                            class="download-status"
+                            :class="`status-${download.status}`"
+                            x-text="download.status.charAt(0).toUpperCase() + download.status.slice(1)"
+                        ></div>
+                    </div>
+                    <div class="download-info">
+                        <span x-text="`${download.mediaType === 'MOVIE' ? '🎬' : '📺'} ${download.mediaType.replace('_', ' ')}`"></span>
+                        <span x-text="`📁 ${download.folder}`"></span>
+                        <span x-text="`${download.progress}%`"></span>
+                    </div>
+                    <div class="progress-container">
+                        <div 
+                            class="progress-bar" 
+                            :style="`width: ${download.progress}%`"
+                        ></div>
+                    </div>
+                </div>
+            </template>
+        </div>
+    </div>
+
+    <script>
+        function fileUploader() {
+            return {
+                form: {
+                    url: '',
+                    mediaType: 'MOVIE',
+                    folder: ''
+                },
+                downloads: [],
+                folders: [],
+                loading: false,
+                error: '',
+                pollIntervals: new Map(),
+                showFolderSuggestions: false,
+                downloadsPollInterval: null,
+                get filteredFolders() {
+                    if (!this.form.folder) return this.folders;
+                    return this.folders.filter(f => f.toLowerCase().includes(this.form.folder.toLowerCase()));
+                },
+                apiBaseUrl: 'http://localhost:5000/',
+
+                async init() {
+                    await this.loadFolders();
+                    await this.fetchDownloads();
+                },
+
+                async onMediaTypeChange() {
+                    await this.loadFolders();
+                    if (this.folders.length > 0) this.form.folder = this.folders[0];
+                },
+
+                async loadFolders() {
+                    try {
+                        const response = await fetch(`${this.apiBaseUrl}/folders?media_type=${this.form.mediaType}`);
+                        this.folders = await response.json();
+                    } catch (error) {
+                        console.error('Failed to load folders:', error);
+                        this.folders = [];
+                    }
+                },
+
+                async fetchDownloads() {
+                    try {
+                        const response = await fetch(`${this.apiBaseUrl}/downloads`);
+                        const activeDownloads = await response.json();
+                        this.downloads = (activeDownloads || []).map(d => ({
+                            id: d.gid,
+                            gid: d.gid,
+                            name: d.files && d.files[0] && d.files[0].path ? d.files[0].path.split('/').pop() : 'Unknown File',
+                            url: d.files && d.files[0] && d.files[0].uris && d.files[0].uris[0] ? d.files[0].uris[0].uri : '',
+                            folder: d.dir ? d.dir.split('/').pop() : '',
+                            mediaType: '', // Not available from aria2, unless you store it elsewhere
+                            progress: (() => {
+                                const total = parseInt(d.totalLength) || 1;
+                                const done = parseInt(d.completedLength) || 0;
+                                return Math.round((done / total) * 100);
+                            })(),
+                            status: d.status,
+                            startTime: Date.now() // Not available from aria2, so just set now
+                        }));
+
+                        // Start polling if there are active downloads
+                        if (this.downloads.length > 0 && !this.downloadsPollInterval) {
+                            this.startDownloadsPolling();
+                        } else if (this.downloads.length === 0 && this.downloadsPollInterval) {
+                            this.stopDownloadsPolling();
+                        }
+                    } catch (error) {
+                        console.error('Failed to fetch downloads:', error);
+                        this.downloads = [];
+                    }
+                },
+
+                startDownloadsPolling() {
+                    if (this.downloadsPollInterval) return;
+                    this.downloadsPollInterval = setInterval(() => {
+                        this.fetchDownloads();
+                    }, 3000);
+                },
+
+                stopDownloadsPolling() {
+                    if (this.downloadsPollInterval) {
+                        clearInterval(this.downloadsPollInterval);
+                        this.downloadsPollInterval = null;
+                    }
+                },
+
+                async startDownload() {
+                    if (!this.form.url.trim()) {
+                        this.error = 'Please enter a file URL';
+                        return;
+                    }
+                    if (!this.form.folder.trim()) {
+                        this.error = 'Please enter or select a folder';
+                        return;
+                    }
+
+                    this.loading = true;
+                    this.error = '';
+
+                    try {
+                        // Optionally, create folder if it doesn't exist
+                        if (!this.folders.includes(this.form.folder)) {
+                            await fetch(`${this.apiBaseUrl}/folders`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ folder: this.form.folder })
+                            });
+                            await this.loadFolders();
+                        }
+
+                        const response = await fetch(`${this.apiBaseUrl}/download`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                url: this.form.url,
+                                media_type: this.form.mediaType,
+                                folder: this.form.folder
+                            })
+                        });
+
+                        const result = await response.json();
+                        
+                        if (!response.ok) {
+                            throw new Error(result.error || 'Download failed');
+                        }
+
+                        // Extract filename from URL
+                        const fileName = this.form.url.split('/').pop() || 'Unknown File';
+                        
+                        const download = {
+                            id: result.result || Date.now(),
+                            gid: result.result,
+                            name: fileName,
+                            url: this.form.url,
+                            folder: this.form.folder,
+                            mediaType: this.form.mediaType,
+                            progress: 0,
+                            status: 'downloading',
+                            startTime: Date.now()
+                        };
+
+                        this.downloads.push(download);
+                        
+                        // Clear form
+                        this.form.url = '';
+                        // Optionally reset folder to default
+                        // this.form.folder = this.folders[0] || '';
+
+                        // Start polling for this download
+                        this.pollDownloadStatus(download);
+
+                        // Start polling all downloads if not already started
+                        if (!this.downloadsPollInterval) {
+                            this.startDownloadsPolling();
+                        }
+
+                    } catch (error) {
+                        this.error = `Failed to start download: ${error.message}`;
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+                
+                async pollDownloadStatus(download) {
+                    const pollInterval = setInterval(async () => {
+                        try {
+                            const response = await fetch(`${this.apiBaseUrl}/downloads`);
+                            const activeDownloads = await response.json();
+                            
+                            const ariaDownload = activeDownloads.find(d => d.gid === download.gid);
+                            
+                            if (ariaDownload) {
+                                // Update progress from aria2
+                                const totalLength = parseInt(ariaDownload.totalLength) || 1;
+                                const completedLength = parseInt(ariaDownload.completedLength) || 0;
+                                download.progress = Math.round((completedLength / totalLength) * 100);
+                                
+                                // Update status
+                                if (ariaDownload.status === 'complete') {
+                                    download.status = 'completed';
+                                    download.progress = 100;
+                                    this.stopPolling(download.id);
+                                } else if (ariaDownload.status === 'error') {
+                                    download.status = 'error';
+                                    this.stopPolling(download.id);
+                                }
+                            } else {
+                                // Download no longer in active list - might be completed or failed
+                                download.status = download.progress >= 100 ? 'completed' : 'error';
+                                this.stopPolling(download.id);
+                            }
+                        } catch (error) {
+                            console.error('Failed to poll download status:', error);
+                            // Continue polling on error
+                        }
+                    }, 1000);
+                    
+                    // Store interval reference
+                    this.pollIntervals.set(download.id, pollInterval);
+                },
+                
+                stopPolling(downloadId) {
+                    const interval = this.pollIntervals.get(downloadId);
+                    if (interval) {
+                        clearInterval(interval);
+                        this.pollIntervals.delete(downloadId);
+                    }
+                }
+            }
+        }
+    </script>
 </body>
 </html>
